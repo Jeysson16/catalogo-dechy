@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, productCatalogDb } from '../config/firebase';
+import { decorateCatalogProduct } from '../utils/catalogProduct';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
@@ -382,21 +383,54 @@ export const Catalog: React.FC = () => {
     return () => unsub();
   }, []);
 
-  // Fetch products
+  // Fetch products (dual architecture: base from inventory app, customization & pricing from Dechy)
   useEffect(() => {
     if (!selectedBranch) return;
     setLoading(true);
-    const q = query(collection(db, "products"), where("branch", "==", selectedBranch.id));
-    const unsub = onSnapshot(q, (snap) => {
-      const prods: any[] = [];
-      snap.forEach(doc => {
-        const d = doc.data();
-        prods.push({ id: doc.id, ...d, currentStock: Number(d.currentStock) || 0, minStock: Number(d.minStock) || 0, price: Number(d.unitPrice) || Number(d.price) || 0 });
-      });
-      setProducts(prods);
+    
+    let baseProducts: any[] = [];
+    let branchLinks: any[] = [];
+    let baseLoaded = false;
+    let linksLoaded = false;
+
+    const updateCombinedProducts = () => {
+      if (!baseLoaded || !linksLoaded) return;
+      const linksMap = new Map<string, any>(branchLinks.map(l => [l.catalogProductId || l.productId, l]));
+      const combined = baseProducts
+        .map(p => decorateCatalogProduct(p, linksMap.get(p.id)))
+        .filter(p => p.visible !== false && p.branchCatalogEnabled !== false);
+      setProducts(combined);
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    };
+
+    // Listen to inventory app base products
+    const qBase = query(collection(productCatalogDb, "products"));
+    const unsubBase = onSnapshot(qBase, (snap) => {
+      baseProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      baseLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching inventory products:", err);
+      baseLoaded = true;
+      updateCombinedProducts();
+    });
+
+    // Listen to Dechy branch customization links
+    const qLinks = query(collection(db, "branchCatalogProducts"), where("branchId", "==", selectedBranch.id));
+    const unsubLinks = onSnapshot(qLinks, (snap) => {
+      branchLinks = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      linksLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching Dechy branch links:", err);
+      linksLoaded = true;
+      updateCombinedProducts();
+    });
+
+    return () => {
+      unsubBase();
+      unsubLinks();
+    };
   }, [selectedBranch]);
 
   const categories = useMemo(() => {
