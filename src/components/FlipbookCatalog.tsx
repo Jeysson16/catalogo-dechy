@@ -280,9 +280,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           </div>
 
           <div className="z-10 bg-slate-900/70 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-800 shadow-2xl my-4">
-            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5" /> Bad Bunny - Eoow Sonando 🎵
-            </h4>
+            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Instrucciones Rápidas</h4>
             <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside font-light">
               <li>Desliza la pantalla hacia la izquierda o derecha para cambiar páginas.</li>
               <li>Presiona el botón de sonido 🔊 arriba si deseas pausar o cambiar música.</li>
