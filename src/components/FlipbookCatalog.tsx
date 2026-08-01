@@ -77,7 +77,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
     // Group products by category and create editorial spreads
     categories.forEach(cat => {
-      const catProducts = products.filter(p => p.category === cat);
+      const catProducts = products.filter(p => p.category === cat && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
       if (catProducts.length === 0) return;
 
       // Add Category Hero Page

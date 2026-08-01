@@ -69,10 +69,12 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
 
   // Helper to clean/format WhatsApp number
   const getCleanWhatsAppNumber = (branch: any) => {
-    let rawNum = branch?.configuracion?.redes_sociales?.whatsapp || 
-                 branch?.configuracion?.contacto?.telefono || 
-                 branch?.telefono;
-    if (!rawNum) return '';
+    let rawNum = branch?.configuracion?.contacto?.telefono || 
+                 branch?.configuracion?.redes_sociales?.whatsapp || 
+                 branch?.telefono || 
+                 branch?.phone || 
+                 '946303481';
+    if (!rawNum) return '51946303481';
     
     if (rawNum.includes('wa.me/') || rawNum.includes('phone=')) {
       const match = rawNum.match(/(?:wa\.me\/|phone=)(\d+)/);
@@ -83,7 +85,7 @@ export const SharedCartView: React.FC<SharedCartViewProps> = ({
     if (digits.length === 9) {
       digits = '51' + digits; // Peru country code fallback
     }
-    return digits;
+    return digits || '51946303481';
   };
 
   // Action: Open WhatsApp chat

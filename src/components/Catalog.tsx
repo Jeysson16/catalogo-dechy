@@ -180,10 +180,12 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     message += `Puedes ver el detalle de mi selección aquí:\n${url}`;
     
     const getCleanWhatsAppNumber = (branch: any) => {
-      let rawNum = branch?.configuracion?.redes_sociales?.whatsapp || 
-                   branch?.configuracion?.contacto?.telefono || 
-                   branch?.telefono;
-      if (!rawNum) return '';
+      let rawNum = branch?.configuracion?.contacto?.telefono || 
+                   branch?.configuracion?.redes_sociales?.whatsapp || 
+                   branch?.telefono || 
+                   branch?.phone || 
+                   '946303481';
+      if (!rawNum) return '51946303481';
       if (rawNum.includes('wa.me/') || rawNum.includes('phone=')) {
         const match = rawNum.match(/(?:wa\.me\/|phone=)(\d+)/);
         if (match && match[1]) return match[1];
@@ -192,7 +194,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       if (digits.length === 9) {
         digits = '51' + digits;
       }
-      return digits;
+      return digits || '51946303481';
     };
 
     const waNumber = getCleanWhatsAppNumber(selectedBranch);
@@ -438,7 +440,7 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       const linksMap = new Map<string, any>(branchLinks.map(l => [l.catalogProductId || l.productId, l]));
       const combined = baseProducts
         .map(p => decorateCatalogProduct(p, linksMap.get(p.id)))
-        .filter(p => p.visible !== false && p.branchCatalogEnabled !== false);
+        .filter(p => p.visible !== false && p.branchCatalogEnabled !== false && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
       setProducts(combined);
       setLoading(false);
     };
