@@ -1,6 +1,5 @@
 // Audio Controller for Interactive Flipbook
-// Features "Bad Bunny - Eoow" background audio track with synthesized ambient fallback
-// and crisp paper flip acoustic effects.
+// Features "Bad Bunny - Eoow" background audio track with multiple audio mirrors & fallback synth
 
 class AudioController {
   private ctx: AudioContext | null = null;
@@ -10,13 +9,39 @@ class AudioController {
   private lfo: OscillatorNode | null = null;
   private trackAudio: HTMLAudioElement | null = null;
 
+  // List of audio sources to try for Bad Bunny - Eoow (local asset first, then mirrors)
+  private audioSources = [
+    "/audio/eoow.mp3",
+    "https://raw.githubusercontent.com/Jeysson16/catalogo-dechy/main/public/audio/eoow.mp3",
+    "https://ia801602.us.archive.org/27/items/bad-bunny-eoow/Bad%20Bunny%20-%20EOOW.mp3"
+  ];
+  private currentSourceIdx = 0;
+
   constructor() {
     if (typeof window !== "undefined") {
-      // Bad Bunny - Eoow audio track source (with reliable stream URL)
-      this.trackAudio = new Audio("https://ia801602.us.archive.org/27/items/bad-bunny-eoow/Bad%20Bunny%20-%20EOOW.mp3");
-      this.trackAudio.loop = true;
-      this.trackAudio.volume = 0.55;
+      this.initAudioElement();
     }
+  }
+
+  private initAudioElement() {
+    if (this.currentSourceIdx >= this.audioSources.length) return;
+    const url = this.audioSources[this.currentSourceIdx];
+    this.trackAudio = new Audio(url);
+    this.trackAudio.loop = true;
+    this.trackAudio.volume = 0.55;
+
+    this.trackAudio.onerror = () => {
+      console.warn(`Audio source ${url} failed, trying next mirror...`);
+      this.currentSourceIdx++;
+      if (this.currentSourceIdx < this.audioSources.length) {
+        this.initAudioElement();
+        if (this.isMusicPlaying) {
+          this.trackAudio?.play().catch(() => this.startAmbientFallback());
+        }
+      } else {
+        if (this.isMusicPlaying) this.startAmbientFallback();
+      }
+    };
   }
 
   private initContext() {
@@ -71,20 +96,24 @@ class AudioController {
   }
 
   /**
-   * Starts playing "Bad Bunny - Eoow" music track with synthesized ambient fallback
+   * Starts playing Bad Bunny - Eoow music track with synthesized ambient fallback
    */
   startMusic() {
     if (this.isMusicPlaying) return;
     this.isMusicPlaying = true;
 
-    // Try playing the Bad Bunny - Eoow track first
     if (this.trackAudio) {
-      this.trackAudio.currentTime = 0;
       const promise = this.trackAudio.play();
       if (promise !== undefined) {
         promise.catch((err) => {
-          console.warn("Audio element playback blocked/failed, starting ambient fallback:", err);
-          this.startAmbientFallback();
+          console.warn("Audio playback blocked/failed, trying fallback:", err);
+          this.currentSourceIdx++;
+          if (this.currentSourceIdx < this.audioSources.length) {
+            this.initAudioElement();
+            this.trackAudio?.play().catch(() => this.startAmbientFallback());
+          } else {
+            this.startAmbientFallback();
+          }
         });
       }
     } else {
