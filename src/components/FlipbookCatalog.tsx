@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ZoomIn, ZoomOut, Volume2, VolumeX, SkipBack, ChevronLeft, ChevronRight, SkipForward, 
-  Play, Pause, Maximize, Minimize, X, Plus, Sparkles, ShieldCheck, Award, Zap, CheckCircle2 
+  Play, Pause, Maximize, Minimize, X, Plus, Sparkles, ShieldCheck, Award, Zap, CheckCircle2, Music 
 } from 'lucide-react';
 import { flipbookAudio } from '../utils/audioEffects';
 
@@ -34,11 +34,25 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 }) => {
   const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
-  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(true); // Active by default
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
   const [addedToast, setAddedToast] = useState<string | null>(null);
+
+  // Touch gesture tracking for mobile swipe
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Auto-play music by default when entering the magazine
+  useEffect(() => {
+    flipbookAudio.startMusic();
+    setIsSoundPlaying(true);
+
+    return () => {
+      flipbookAudio.stopMusic();
+    };
+  }, []);
 
   // Organize catalog into paired pages (2 pages per spread: Left and Right)
   const allPages = useMemo(() => {
@@ -49,7 +63,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     pages.push({
       type: 'editorial',
       title: 'INNOVACIÓN & DISEÑO',
-      subtitle: 'Bienvenido al modo de lectura interactiva de nuestro catálogo oficial. Desarrollado con tecnología de alta fidelidad para una experiencia envolvente y relajante.',
+      subtitle: 'Bienvenido al modo de lectura interactiva de nuestro catálogo oficial. Disfruta de la mejor música y diseño en una experiencia envolvente.',
       pageNumber: pageNum++
     });
 
@@ -123,7 +137,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
   };
 
   const toggleSound = () => {
-    const active = flipbookAudio.toggleAmbient();
+    const active = flipbookAudio.toggleMusic();
     setIsSoundPlaying(active);
   };
 
@@ -137,6 +151,31 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentSpreadIndex, spreads.length]);
+
+  // Touch Swipe Handling for Mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+
+    // Only swipe if horizontal drag is dominant and > 45px
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 45) {
+      if (diffX > 0) {
+        handlePageChange(currentSpreadIndex + 1); // Swipe left -> next page
+      } else {
+        handlePageChange(currentSpreadIndex - 1); // Swipe right -> prev page
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   // Auto-play interval
   useEffect(() => {
@@ -184,22 +223,22 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
   // Render individual page content
   const renderPage = (page: BookPage, isLeft: boolean) => {
-    if (!page) return <div className="w-full h-full bg-slate-900" />;
+    if (!page) return <div className="w-full h-full bg-slate-950" />;
 
     if (page.type === 'editorial') {
       return (
-        <div className="w-full h-full p-8 sm:p-12 flex flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-stone-950 text-slate-300 border-r border-slate-800/50">
+        <div className="w-full h-full p-6 sm:p-10 flex flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-stone-950 text-slate-300 border-r border-slate-800/50 overflow-y-auto max-h-[78vh] md:max-h-none scrollbar-thin">
           <div>
-            <div className="flex items-center gap-2 text-amber-400 font-serif text-sm tracking-widest uppercase mb-6">
+            <div className="flex items-center gap-2 text-amber-400 font-serif text-sm tracking-widest uppercase mb-4">
               <Sparkles className="w-4 h-4" /> Editorial & Garantía
             </div>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white mb-6 leading-tight">
+            <h2 className="text-xl sm:text-3xl font-serif font-bold text-white mb-4 leading-tight">
               {page.title}
             </h2>
-            <p className="text-sm text-slate-400 leading-relaxed font-light mb-8 max-w-sm">
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-light mb-6 max-w-sm">
               {page.subtitle}
             </p>
-            <div className="space-y-4 pt-6 border-t border-slate-800/80 text-xs text-slate-400">
+            <div className="space-y-3 pt-4 border-t border-slate-800/80 text-xs text-slate-400">
               <div className="flex items-center gap-3">
                 <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
                 <span>Productos garantizados contra defectos de fabricación.</span>
@@ -214,7 +253,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
               </div>
             </div>
           </div>
-          <div className="text-xs font-mono text-slate-500 flex items-center justify-between pt-6 border-t border-slate-800/40">
+          <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between pt-4 border-t border-slate-800/40 mt-6">
             <span>DECHY CORPORATIVE 2026</span>
             <span>PÁGINA {page.pageNumber}</span>
           </div>
@@ -224,32 +263,34 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
     if (page.type === 'cover') {
       return (
-        <div className="w-full h-full p-8 sm:p-12 flex flex-col justify-between bg-gradient-to-bl from-amber-950/40 via-slate-950 to-neutral-950 text-white relative overflow-hidden group border-l border-slate-800/50">
+        <div className="w-full h-full p-6 sm:p-10 flex flex-col justify-between bg-gradient-to-bl from-amber-950/40 via-slate-950 to-neutral-950 text-white relative overflow-y-auto max-h-[78vh] md:max-h-none scrollbar-thin group border-l border-slate-800/50">
           <div className="absolute -right-16 -top-16 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-500/20 transition-all duration-1000" />
           
           <div className="z-10">
-            <div className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-semibold tracking-widest uppercase mb-8">
+            <div className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-semibold tracking-widest uppercase mb-4 sm:mb-6">
               Edición Oficial
             </div>
-            <h1 className="text-3xl sm:text-5xl font-serif font-extrabold tracking-tight leading-none mb-4 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-4xl font-serif font-extrabold tracking-tight leading-tight mb-3 bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
               {page.title}
             </h1>
-            <div className="w-16 h-1 bg-gradient-to-r from-amber-500 to-amber-600 rounded mb-6" />
-            <p className="text-sm sm:text-base text-slate-300 font-light max-w-md">
+            <div className="w-16 h-1 bg-gradient-to-r from-amber-500 to-amber-600 rounded mb-4" />
+            <p className="text-xs sm:text-sm text-slate-300 font-light max-w-md">
               {page.subtitle}
             </p>
           </div>
 
-          <div className="z-10 bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-2xl mt-6">
-            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Instrucciones Rápidas</h4>
-            <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside font-light">
-              <li>Usa las flechas del teclado <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono">←</kbd> <kbd className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 font-mono">→</kbd> o haz clic en las páginas para avanzar.</li>
-              <li>Activa el <strong>Sonidito de Calma</strong> 🔊 arriba para música ambiental de relajación.</li>
-              <li>Haz clic en <strong>+ Añadir</strong> para preparar tu cotización.</li>
+          <div className="z-10 bg-slate-900/70 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-800 shadow-2xl my-4">
+            <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Music className="w-3.5 h-3.5" /> Bad Bunny - Eoow Sonando 🎵
+            </h4>
+            <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside font-light">
+              <li>Desliza la pantalla hacia la izquierda o derecha para cambiar páginas.</li>
+              <li>Presiona el botón de sonido 🔊 arriba si deseas pausar o cambiar música.</li>
+              <li>Haz clic en <strong>+ Añadir</strong> para cotizar directo.</li>
             </ul>
           </div>
 
-          <div className="text-xs font-mono text-slate-500 flex items-center justify-between z-10 pt-6 border-t border-slate-800/40">
+          <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between z-10 pt-4 border-t border-slate-800/40">
             <span>MODO REVISTA INTERACTIVA</span>
             <span>PÁGINA {page.pageNumber}</span>
           </div>
@@ -259,35 +300,34 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
     if (page.type === 'category-hero') {
       return (
-        <div className="w-full h-full p-8 sm:p-12 flex flex-col justify-between bg-gradient-to-r from-stone-950 via-slate-950 to-neutral-900 text-white relative overflow-hidden border-r border-slate-800/50">
+        <div className="w-full h-full p-6 sm:p-10 flex flex-col justify-between bg-gradient-to-r from-stone-950 via-slate-950 to-neutral-900 text-white relative overflow-y-auto max-h-[78vh] md:max-h-none scrollbar-thin border-r border-slate-800/50">
           <div className="absolute -left-24 -bottom-24 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/3 w-80 h-80 rounded-full border-4 border-amber-500/20 opacity-30 pointer-events-none shadow-[0_0_80px_rgba(245,158,11,0.25)]" />
 
-          <div className="z-10 mt-12">
-            <span className="text-xs uppercase font-mono tracking-[0.3em] text-amber-400 mb-2 block">
+          <div className="z-10 mt-4 sm:mt-8">
+            <span className="text-[11px] uppercase font-mono tracking-[0.3em] text-amber-400 mb-2 block">
               COLECCIÓN EXCLUSIVA
             </span>
-            <h2 className="text-3xl sm:text-5xl font-serif font-extrabold tracking-tight text-white mb-6">
+            <h2 className="text-2xl sm:text-4xl font-serif font-extrabold tracking-tight text-white mb-4">
               {page.title}
             </h2>
-            <div className="w-20 h-1 bg-amber-500 rounded mb-6" />
-            <p className="text-sm text-slate-300 max-w-sm font-light leading-relaxed">
-              {page.subtitle}. Productos seleccionados especialmente para cumplir los estándares más rigurosos de funcionalidad, estética y eficiencia de consumo.
+            <div className="w-20 h-1 bg-amber-500 rounded mb-4" />
+            <p className="text-xs sm:text-sm text-slate-300 max-w-sm font-light leading-relaxed">
+              {page.subtitle}. Productos seleccionados especialmente para cumplir los estándares más rigurosos de calidad.
             </p>
           </div>
 
-          <div className="z-10 grid grid-cols-2 gap-4 my-8 max-w-xs text-xs text-slate-300 font-light">
-            <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-              <span className="block font-bold text-amber-400 text-sm mb-1">100%</span>
+          <div className="z-10 grid grid-cols-2 gap-3 my-6 max-w-xs text-xs text-slate-300 font-light">
+            <div className="p-2.5 bg-slate-900/50 border border-slate-800 rounded-xl">
+              <span className="block font-bold text-amber-400 text-xs mb-0.5">100%</span>
               Garantía de calidad
             </div>
-            <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-              <span className="block font-bold text-amber-400 text-sm mb-1">Stock</span>
+            <div className="p-2.5 bg-slate-900/50 border border-slate-800 rounded-xl">
+              <span className="block font-bold text-amber-400 text-xs mb-0.5">Stock</span>
               Entrega inmediata
             </div>
           </div>
 
-          <div className="text-xs font-mono text-slate-500 flex items-center justify-between z-10 pt-4 border-t border-slate-800/40">
+          <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between z-10 pt-4 border-t border-slate-800/40">
             <span className="uppercase">{page.category}</span>
             <span>PÁGINA {page.pageNumber}</span>
           </div>
@@ -297,75 +337,68 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
     if (page.type === 'product-grid') {
       return (
-        <div className="w-full h-full p-6 sm:p-8 flex flex-col justify-between bg-gradient-to-br from-slate-950 via-neutral-950 to-zinc-950 text-white border-l border-slate-800/50">
+        <div className="w-full h-full p-4 sm:p-7 flex flex-col justify-between bg-gradient-to-br from-slate-950 via-neutral-950 to-zinc-950 text-white border-l border-slate-800/50 overflow-y-auto max-h-[78vh] md:max-h-none scrollbar-thin">
           <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-6">
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-widest font-mono">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
+              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-widest font-mono">
                 {page.category}
               </span>
-              <span className="text-xs font-light text-slate-400">
-                Especificaciones & Modelos
+              <span className="text-[10px] font-light text-slate-400">
+                Modelos & Precios
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {page.products?.map((p, idx) => {
                 const img = p.images?.[0] || p.imageUrl || '/img/hero_lifestyle_bg.png';
                 const price = Number(p.price) || Number(p.unitPrice) || 0;
                 return (
-                  <div key={p.id || idx} className="group flex flex-col bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800/80 hover:border-amber-500/40 rounded-xl overflow-hidden transition-all duration-300 p-3 shadow-lg">
-                    <div className="relative w-full h-36 sm:h-44 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center mb-3 border border-slate-800/50">
+                  <div key={p.id || idx} className="group flex flex-col bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 rounded-xl overflow-hidden transition-all duration-300 p-2.5 shadow-lg">
+                    <div className="relative w-full h-28 sm:h-36 bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center mb-2 border border-slate-800/50">
                       <img 
                         src={img} 
                         alt={p.name} 
-                        className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-500" 
+                        className="w-full h-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-500" 
                         loading="lazy"
                       />
                       {p.isOnSale && (
-                        <span className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        <span className="absolute top-1.5 left-1.5 bg-red-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
                           OFERTA
                         </span>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-0 group-hover:opacity-60 transition-opacity" />
                     </div>
 
                     <div className="flex-1 flex flex-col justify-between">
                       <div>
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="font-mono text-xs font-extrabold text-amber-400 tracking-wider uppercase truncate">
+                          <span className="font-mono text-[10px] font-extrabold text-amber-400 tracking-wider uppercase truncate">
                             {p.sku || p.code || `MOD-${idx + 1}`}
                           </span>
-                          <span className="text-xs sm:text-sm font-extrabold text-emerald-400">
+                          <span className="text-xs font-extrabold text-emerald-400">
                             S/ {price.toFixed(2)}
                           </span>
                         </div>
-                        <h4 className="text-xs sm:text-sm font-bold text-slate-200 line-clamp-1 group-hover:text-white transition-colors mb-1.5">
+                        <h4 className="text-xs font-bold text-slate-200 line-clamp-1 group-hover:text-white transition-colors mb-1">
                           {p.name}
                         </h4>
                       </div>
 
-                      <div className="text-[10px] text-slate-400 space-y-0.5 mb-3 pt-1 border-t border-slate-800/60 font-light">
+                      <div className="text-[10px] text-slate-400 space-y-0.5 mb-2 pt-1 border-t border-slate-800/60 font-light">
                         <div className="flex justify-between">
                           <span>Categoría:</span>
-                          <span className="text-slate-300 truncate font-mono max-w-[110px]">{p.category || 'Varios'}</span>
+                          <span className="text-slate-300 truncate font-mono max-w-[100px]">{p.category || 'Varios'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Stock aprox:</span>
+                          <span>Stock:</span>
                           <span className={p.currentStock > 0 ? "text-emerald-400 font-semibold" : "text-amber-400"}>
                             {p.currentStock > 0 ? `${p.currentStock} unid.` : 'Consultar'}
                           </span>
                         </div>
-                        {p.unitsPerBox && p.unitsPerBox > 1 && (
-                          <div className="flex justify-between text-slate-350">
-                            <span>Caja:</span>
-                            <span>{p.unitsPerBox} uds</span>
-                          </div>
-                        )}
                       </div>
 
                       <button
                         onClick={() => handleAddWithFeedback(p)}
-                        className="w-full mt-auto bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 border border-slate-700/80 hover:border-amber-400 text-[11px] font-bold py-1.5 px-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                        className="w-full mt-auto bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 border border-slate-700/80 hover:border-amber-400 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-1 shadow-sm active:scale-95"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Añadir a Cotización</span>
@@ -377,7 +410,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             </div>
           </div>
 
-          <div className="text-xs font-mono text-slate-500 flex items-center justify-between pt-4 border-t border-slate-800/40">
+          <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between pt-3 border-t border-slate-800/40 mt-3">
             <span>CATÁLOGO DE MODELOS</span>
             <span>PÁGINA {page.pageNumber}</span>
           </div>
@@ -397,75 +430,72 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute top-20 left-1/2 -translate-x-1/2 z-[300] bg-emerald-500 text-slate-950 font-extrabold px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-2 text-sm border border-white/20"
+            className="absolute top-16 left-1/2 -translate-x-1/2 z-[300] bg-emerald-500 text-slate-950 font-extrabold px-5 py-2 rounded-full shadow-2xl flex items-center gap-2 text-xs border border-white/20"
           >
-            <CheckCircle2 className="w-5 h-5" />
+            <CheckCircle2 className="w-4 h-4" />
             <span>{addedToast}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* TOP CONTROLS BAR (exact layout inspired by photo) */}
-      <div className="w-full py-3 px-4 sm:px-8 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-between z-30 shadow-2xl">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-extrabold font-mono uppercase text-amber-400 tracking-widest px-2.5 py-1 bg-amber-500/10 rounded border border-amber-500/30 hidden sm:inline-block">
+      {/* TOP CONTROLS BAR */}
+      <div className="w-full py-2.5 px-3 sm:px-8 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-between z-30 shadow-2xl">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] sm:text-xs font-extrabold font-mono uppercase text-amber-400 tracking-widest px-2 py-0.5 bg-amber-500/10 rounded border border-amber-500/30">
             Modo Revista
-          </span>
-          <span className="text-xs text-slate-400 hidden lg:inline font-light">
-            Navegación interactiva estilo libro digital
           </span>
         </div>
 
         {/* Center Control Pill */}
-        <div className="flex items-center gap-1 sm:gap-2 bg-slate-900 border border-slate-700/80 rounded-full px-3 py-1.5 shadow-xl text-slate-300 text-xs font-medium">
+        <div className="flex items-center gap-1 sm:gap-2 bg-slate-900 border border-slate-700/80 rounded-full px-2.5 py-1 shadow-xl text-slate-300 text-xs font-medium">
           {/* Zoom Controls */}
           <button 
             onClick={() => setIsZoomed(!isZoomed)} 
             className={`p-1.5 rounded-full transition-colors ${isZoomed ? 'bg-amber-500 text-slate-950' : 'hover:bg-slate-800 hover:text-white'}`}
             title="Zoom (Ampliar/Reducir)"
           >
-            {isZoomed ? <ZoomOut className="w-4 h-4" /> : <ZoomIn className="w-4 h-4" />}
+            {isZoomed ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
           </button>
           
-          {/* Sound Toggle */}
+          {/* Sound Toggle (Bad Bunny - Eoow) */}
           <button 
             onClick={toggleSound} 
-            className={`p-1.5 rounded-full transition-colors relative ${isSoundPlaying ? 'bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}
-            title="Sonido de Calma (Música ambiental relajante para leer)"
+            className={`p-1.5 rounded-full transition-colors relative flex items-center gap-1 ${isSoundPlaying ? 'bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}
+            title="Música (Bad Bunny - Eoow)"
           >
-            {isSoundPlaying ? <Volume2 className="w-4 h-4 animate-pulse" /> : <VolumeX className="w-4 h-4" />}
+            {isSoundPlaying ? <Volume2 className="w-3.5 h-3.5 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
           </button>
 
-          <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+          <div className="w-[1px] h-3.5 bg-slate-700 mx-0.5" />
 
           {/* Navigation Controls */}
           <button 
             onClick={() => handlePageChange(0)} 
             disabled={currentSpreadIndex === 0}
-            className="p-1.5 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
+            className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Primera página"
           >
-            <SkipBack className="w-4 h-4" />
+            <SkipBack className="w-3.5 h-3.5" />
           </button>
 
           <button 
             onClick={() => handlePageChange(currentSpreadIndex - 1)} 
             disabled={currentSpreadIndex === 0}
-            className="p-1.5 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
-            title="Página Anterior (←)"
+            className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
+            title="Página Anterior"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <span className="font-mono px-2 text-slate-200 text-xs font-bold">
-            {currentSpreadIndex + 1} / {spreads.length}
+          <span className="font-mono px-1.5 text-slate-200 text-xs font-bold">
+            {currentSpreadIndex + 1}/{spreads.length}
           </span>
 
           <button 
             onClick={() => handlePageChange(currentSpreadIndex + 1)} 
             disabled={currentSpreadIndex === spreads.length - 1}
-            className="p-1.5 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
-            title="Página Siguiente (→)"
+            className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
+            title="Página Siguiente"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -473,21 +503,21 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           <button 
             onClick={() => handlePageChange(spreads.length - 1)} 
             disabled={currentSpreadIndex === spreads.length - 1}
-            className="p-1.5 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
+            className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Última página"
           >
-            <SkipForward className="w-4 h-4" />
+            <SkipForward className="w-3.5 h-3.5" />
           </button>
 
-          <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+          <div className="w-[1px] h-3.5 bg-slate-700 mx-0.5 hidden sm:block" />
 
           {/* Auto Play */}
           <button 
             onClick={() => setIsAutoPlaying(!isAutoPlaying)} 
-            className={`p-1.5 rounded-full transition-colors ${isAutoPlaying ? 'bg-amber-500 text-slate-950' : 'hover:bg-slate-800 hover:text-white'}`}
-            title="Pase automático de páginas"
+            className={`p-1.5 rounded-full transition-colors hidden sm:inline-block ${isAutoPlaying ? 'bg-amber-500 text-slate-950' : 'hover:bg-slate-800 hover:text-white'}`}
+            title="Pase automático"
           >
-            {isAutoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {isAutoPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
           </button>
 
           {/* Fullscreen */}
@@ -496,71 +526,75 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             className="p-1.5 hover:bg-slate-800 hover:text-white rounded-full hidden sm:inline-block"
             title="Pantalla completa"
           >
-            {isFullScreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            {isFullScreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
           </button>
         </div>
 
         {/* Right Corner: Page Jumper and Close */}
-        <div className="flex items-center gap-3">
-          <form onSubmit={handleGoToPage} className="hidden md:flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs">
+        <div className="flex items-center gap-2">
+          <form onSubmit={handleGoToPage} className="hidden md:flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-0.5 text-xs">
             <span className="text-slate-400">Pág:</span>
             <input 
               type="text" 
               value={jumpPageInput}
               onChange={e => setJumpPageInput(e.target.value)}
-              placeholder={`${currentSpread[0]?.pageNumber || 1}-${currentSpread[1]?.pageNumber || 2}`} 
-              className="w-10 bg-transparent text-center font-mono text-amber-400 outline-none font-bold"
+              placeholder={`${currentSpread[0]?.pageNumber || 1}`} 
+              className="w-8 bg-transparent text-center font-mono text-amber-400 outline-none font-bold text-xs"
             />
-            <button type="submit" className="text-[10px] font-extrabold bg-slate-800 hover:bg-amber-500 hover:text-slate-950 px-1.5 py-0.5 rounded transition-colors uppercase">
+            <button type="submit" className="text-[9px] font-extrabold bg-slate-800 hover:bg-amber-500 hover:text-slate-950 px-1 py-0.5 rounded uppercase">
               GO
             </button>
           </form>
 
           <button 
             onClick={onClose}
-            className="flex items-center gap-1.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95"
+            className="flex items-center gap-1 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95"
             title="Cerrar Modo Revista"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Cerrar</span>
           </button>
         </div>
       </div>
 
-      {/* MAIN BOOK SPREAD VIEWPORT */}
-      <div className="flex-1 relative flex items-center justify-center p-2 sm:p-6 md:p-12 overflow-y-auto overflow-x-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-neutral-950">
+      {/* MAIN BOOK SPREAD VIEWPORT WITH TOUCH SWIPE FOR MOBILE */}
+      <div 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 relative flex items-center justify-center p-2 sm:p-6 md:p-10 overflow-y-auto overflow-x-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-neutral-950 touch-pan-y"
+      >
         
-        {/* Left Big Arrow */}
+        {/* Left Big Arrow (Desktop & Tablet) */}
         <button 
           onClick={() => handlePageChange(currentSpreadIndex - 1)} 
           disabled={currentSpreadIndex === 0}
-          className="absolute left-2 sm:left-6 z-30 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 disabled:hover:bg-slate-900 disabled:hover:text-slate-300 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
+          className="absolute left-2 sm:left-4 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
         >
-          <ChevronLeft className="w-7 h-7" />
+          <ChevronLeft className="w-6 h-6" />
         </button>
 
-        {/* Right Big Arrow */}
+        {/* Right Big Arrow (Desktop & Tablet) */}
         <button 
           onClick={() => handlePageChange(currentSpreadIndex + 1)} 
           disabled={currentSpreadIndex === spreads.length - 1}
-          className="absolute right-2 sm:right-6 z-30 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 disabled:hover:bg-slate-900 disabled:hover:text-slate-300 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
+          className="absolute right-2 sm:right-4 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
         >
-          <ChevronRight className="w-7 h-7" />
+          <ChevronRight className="w-6 h-6" />
         </button>
 
-        {/* The 2-Page Book Spread Container */}
-        <div className={`w-full max-w-6xl transition-transform duration-500 ${isZoomed ? 'scale-125 my-12' : 'scale-100'} perspective-[2000px]`}>
+        {/* The Book Spread Container */}
+        <div className={`w-full max-w-6xl transition-transform duration-500 ${isZoomed ? 'scale-110 md:scale-125 my-8' : 'scale-100'} perspective-[2000px]`}>
           
           <AnimatePresence mode="wait">
             <motion.div
               key={currentSpreadIndex}
-              initial={{ rotateY: 12, opacity: 0, scale: 0.95 }}
+              initial={{ rotateY: 12, opacity: 0, scale: 0.96 }}
               animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-              exit={{ rotateY: -12, opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.35, ease: "easeInOut" }}
-              className="w-full grid grid-cols-1 md:grid-cols-2 min-h-[520px] md:min-h-[640px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.85)] border border-slate-800 relative bg-slate-950"
+              exit={{ rotateY: -12, opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="w-full grid grid-cols-1 md:grid-cols-2 min-h-[460px] sm:min-h-[520px] md:min-h-[620px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.85)] border border-slate-800 relative bg-slate-950"
             >
-              {/* Central book binding spine and page fold shadow (Desktop Only) */}
+              {/* Central spine shadow (Desktop Only) */}
               <div className="hidden md:block absolute left-1/2 -translate-x-1/2 w-8 h-full z-20 pointer-events-none bg-gradient-to-r from-black/50 via-neutral-900/40 to-black/50 shadow-[0_0_20px_rgba(0,0,0,0.8)] border-x border-white/5" />
 
               {/* LEFT PAGE */}
@@ -575,17 +609,38 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             </motion.div>
           </AnimatePresence>
 
-          {/* Mobile indicator for second page on small screens */}
+          {/* Mobile indicator / second page rendered smoothly below on small screens */}
           {currentSpread[1] && (
-            <div className="mt-4 block md:hidden w-full min-h-[520px] rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
+            <div className="mt-3 block md:hidden w-full min-h-[460px] rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
               {renderPage(currentSpread[1], false)}
             </div>
           )}
         </div>
       </div>
 
-      {/* BOTTOM PAGINATION THUMbs (Inspired by bottom numbered pills in photo) */}
-      <div className="w-full py-3 px-6 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-md flex items-center justify-center gap-2 overflow-x-auto z-30 scrollbar-thin scrollbar-thumb-slate-700">
+      {/* MOBILE QUICK NAVIGATION ARROWS (Floating at bottom for mobile) */}
+      <div className="flex md:hidden items-center justify-between px-4 py-1.5 bg-slate-900/90 border-t border-slate-800 z-30">
+        <button
+          onClick={() => handlePageChange(currentSpreadIndex - 1)}
+          disabled={currentSpreadIndex === 0}
+          className="flex items-center gap-1 px-3 py-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 rounded-full text-xs font-bold disabled:opacity-30"
+        >
+          <ChevronLeft className="w-4 h-4" /> Anterior
+        </button>
+        <span className="font-mono text-xs text-amber-400 font-bold">
+          Pág {currentSpread[0]?.pageNumber || 1} / {totalPages}
+        </span>
+        <button
+          onClick={() => handlePageChange(currentSpreadIndex + 1)}
+          disabled={currentSpreadIndex === spreads.length - 1}
+          className="flex items-center gap-1 px-3 py-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 rounded-full text-xs font-bold disabled:opacity-30"
+        >
+          Siguiente <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* BOTTOM PAGINATION THUMBS */}
+      <div className="w-full py-2.5 px-4 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-md flex items-center justify-center gap-1.5 overflow-x-auto z-30 scrollbar-thin scrollbar-thumb-slate-700">
         {spreads.map((spread, idx) => {
           const isSelected = idx === currentSpreadIndex;
           const leftNum = spread[0]?.pageNumber || '?';
@@ -596,7 +651,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             <button
               key={idx}
               onClick={() => handlePageChange(idx)}
-              className={`px-3 sm:px-4 py-1.5 rounded-full font-mono text-xs font-bold tracking-tight transition-all shrink-0 ${
+              className={`px-3 py-1 rounded-full font-mono text-[11px] font-bold tracking-tight transition-all shrink-0 ${
                 isSelected 
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 scale-105 shadow-[0_0_15px_rgba(245,158,11,0.4)]' 
                   : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'

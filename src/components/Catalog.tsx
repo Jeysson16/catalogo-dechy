@@ -10,7 +10,11 @@ import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
-export const Catalog: React.FC = () => {
+interface CatalogProps {
+  initialFlipbook?: boolean;
+}
+
+export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => {
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<any | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -42,7 +46,40 @@ export const Catalog: React.FC = () => {
   const [showCatsInNav, setShowCatsInNav] = useState(false);
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
-  const [showFlipbook, setShowFlipbook] = useState(false);
+  const [showFlipbook, setShowFlipbook] = useState(initialFlipbook);
+
+  const openFlipbook = () => {
+    setShowFlipbook(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/revista') {
+      window.history.pushState({ flipbook: true }, '', '/revista');
+    }
+  };
+
+  const closeFlipbook = () => {
+    setShowFlipbook(false);
+    flipbookAudio.stopMusic();
+    if (typeof window !== 'undefined' && window.location.pathname === '/revista') {
+      window.history.pushState({ flipbook: false }, '', '/');
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (initialFlipbook || window.location.pathname.includes('/revista')) {
+        setShowFlipbook(true);
+      }
+      const handlePopState = () => {
+        if (window.location.pathname.includes('/revista')) {
+          setShowFlipbook(true);
+        } else {
+          setShowFlipbook(false);
+          flipbookAudio.stopMusic();
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [initialFlipbook]);
   const [shareQr, setShareQr] = useState('');
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
@@ -840,7 +877,7 @@ export const Catalog: React.FC = () => {
               Categorías
             </button>
             <button 
-              onClick={() => { setShowFlipbook(true); flipbookAudio.playPageFlip(); }} 
+              onClick={() => { openFlipbook(); flipbookAudio.playPageFlip(); }} 
               className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500 hover:to-amber-600 text-amber-400 hover:text-slate-950 rounded-full font-bold text-[10px] sm:text-xs tracking-wider border border-amber-500/40 transition-all shadow-md transform hover:scale-105"
             >
               <span>📖</span>
@@ -1316,7 +1353,7 @@ export const Catalog: React.FC = () => {
               </p>
               <div className="pt-2 flex justify-center">
                 <button
-                  onClick={() => { setShowFlipbook(true); flipbookAudio.playPageFlip(); }}
+                  onClick={() => { openFlipbook(); flipbookAudio.playPageFlip(); }}
                   className="flex items-center gap-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-6 py-3 rounded-full shadow-2xl hover:shadow-amber-500/30 transition-all duration-300 transform hover:-translate-y-0.5 text-xs sm:text-sm tracking-wide uppercase border border-amber-300/40"
                 >
                   <span className="text-base animate-bounce">📖</span>
@@ -1940,8 +1977,7 @@ export const Catalog: React.FC = () => {
             categories={categories}
             selectedBranch={selectedBranch}
             onClose={() => {
-              setShowFlipbook(false);
-              flipbookAudio.stopAmbientMusic();
+              closeFlipbook();
             }}
             onAddToCart={addToCart}
             primaryColor={primaryColor}
