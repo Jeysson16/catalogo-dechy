@@ -9,9 +9,10 @@ export default defineConfig({
   integrations: [react()],
 
   vite: {
+    envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [tailwindcss()],
     css: {
       postcss: {}
     }
   }
-});
+});

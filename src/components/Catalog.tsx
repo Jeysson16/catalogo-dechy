@@ -5,6 +5,8 @@ import { decorateCatalogProduct } from '../utils/catalogProduct';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
+import { FlipbookCatalog } from './FlipbookCatalog';
+import { flipbookAudio } from '../utils/audioEffects';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Moon, Sun, X, Package as PackageIcon, ChevronDown, Plus, Minus, Share2, Truck, MessageSquare, FileText, Mail, Phone, MapPin, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 
@@ -40,6 +42,7 @@ export const Catalog: React.FC = () => {
   const [showCatsInNav, setShowCatsInNav] = useState(false);
   const [cart, setCart] = useState<Record<string, { product: any; qty: number }>>({});
   const [cartOpen, setCartOpen] = useState(false);
+  const [showFlipbook, setShowFlipbook] = useState(false);
   const [shareQr, setShareQr] = useState('');
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
@@ -836,6 +839,13 @@ export const Catalog: React.FC = () => {
             >
               Categorías
             </button>
+            <button 
+              onClick={() => { setShowFlipbook(true); flipbookAudio.playPageFlip(); }} 
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500 hover:to-amber-600 text-amber-400 hover:text-slate-950 rounded-full font-bold text-[10px] sm:text-xs tracking-wider border border-amber-500/40 transition-all shadow-md transform hover:scale-105"
+            >
+              <span>📖</span>
+              <span>Modo Revista</span>
+            </button>
           </div>
 
           {/* Right Action Icons */}
@@ -1299,11 +1309,20 @@ export const Catalog: React.FC = () => {
             <div className="absolute inset-0 z-0">
               <img src={selectedBranch?.configuracion?.bannerHero || '/img/hero_lifestyle_bg.png'} className="w-full h-full object-cover opacity-20 filter blur-sm scale-105" />
             </div>
-            <div className="relative z-10 max-w-2xl mx-auto space-y-2">
+            <div className="relative z-10 max-w-2xl mx-auto space-y-4">
               <h1 className="text-3xl font-serif tracking-tight">Catálogo de Productos</h1>
               <p className="text-[10px] text-amber-250 uppercase tracking-[0.2em] font-bold" style={{ color: primaryColor }}>
                 {selectedBranch ? selectedBranch.name : 'Decor Dechy Haus'}
               </p>
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={() => { setShowFlipbook(true); flipbookAudio.playPageFlip(); }}
+                  className="flex items-center gap-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-6 py-3 rounded-full shadow-2xl hover:shadow-amber-500/30 transition-all duration-300 transform hover:-translate-y-0.5 text-xs sm:text-sm tracking-wide uppercase border border-amber-300/40"
+                >
+                  <span className="text-base animate-bounce">📖</span>
+                  <span>Abrir Libro de Navegación (Modo Revista)</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1910,6 +1929,23 @@ export const Catalog: React.FC = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODO REVISTA (Interactive Digital Flipbook) ── */}
+      <AnimatePresence>
+        {showFlipbook && (
+          <FlipbookCatalog
+            products={products}
+            categories={categories}
+            selectedBranch={selectedBranch}
+            onClose={() => {
+              setShowFlipbook(false);
+              flipbookAudio.stopAmbientMusic();
+            }}
+            onAddToCart={addToCart}
+            primaryColor={primaryColor}
+          />
         )}
       </AnimatePresence>
 
