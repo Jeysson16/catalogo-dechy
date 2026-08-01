@@ -1,5 +1,6 @@
 // Audio Controller for Interactive Flipbook
 // Features "Bad Bunny - Eoow" background audio track with multiple audio mirrors & fallback synth
+// Handles browser autoplay permissions and gesture activation gracefully.
 
 class AudioController {
   private ctx: AudioContext | null = null;
@@ -12,8 +13,7 @@ class AudioController {
   // List of audio sources to try for Bad Bunny - Eoow (local asset first, then mirrors)
   private audioSources = [
     "/audio/eoow.mp3",
-    "https://raw.githubusercontent.com/Jeysson16/catalogo-dechy/main/public/audio/eoow.mp3",
-    "https://ia801602.us.archive.org/27/items/bad-bunny-eoow/Bad%20Bunny%20-%20EOOW.mp3"
+    "https://raw.githubusercontent.com/Jeysson16/catalogo-dechy/main/public/audio/eoow.mp3"
   ];
   private currentSourceIdx = 0;
 
@@ -31,27 +31,29 @@ class AudioController {
     this.trackAudio.volume = 0.55;
 
     this.trackAudio.onerror = () => {
-      console.warn(`Audio source ${url} failed, trying next mirror...`);
       this.currentSourceIdx++;
       if (this.currentSourceIdx < this.audioSources.length) {
         this.initAudioElement();
         if (this.isMusicPlaying) {
-          this.trackAudio?.play().catch(() => this.startAmbientFallback());
+          this.trackAudio?.play().catch(() => {});
         }
-      } else {
-        if (this.isMusicPlaying) this.startAmbientFallback();
       }
     };
   }
 
+  /**
+   * Safe AudioContext initialization only after user gesture
+   */
   private initContext() {
-    if (!this.ctx && typeof window !== "undefined") {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-    }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume();
-    }
+    try {
+      if (!this.ctx && typeof window !== "undefined") {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        this.ctx = new AudioCtx();
+      }
+      if (this.ctx && this.ctx.state === "suspended") {
+        this.ctx.resume().catch(() => {});
+      }
+    } catch (_) {}
   }
 
   /**
@@ -60,7 +62,7 @@ class AudioController {
   playPageFlip() {
     try {
       this.initContext();
-      if (!this.ctx) return;
+      if (!this.ctx || this.ctx.state === "suspended") return;
 
       const duration = 0.22;
       const bufferSize = this.ctx.sampleRate * duration;
@@ -90,41 +92,36 @@ class AudioController {
 
       whiteNoise.start();
       whiteNoise.stop(this.ctx.currentTime + duration);
-    } catch (e) {
-      console.warn("Could not play page flip sound:", e);
-    }
+    } catch (_) {}
   }
 
   /**
-   * Starts playing Bad Bunny - Eoow music track with synthesized ambient fallback
+   * Starts playing Bad Bunny - Eoow music track with safe gesture handling
    */
-  startMusic() {
-    if (this.isMusicPlaying) return;
+  startMusic(): boolean {
+    if (this.isMusicPlaying) return true;
     this.isMusicPlaying = true;
 
     if (this.trackAudio) {
       const promise = this.trackAudio.play();
       if (promise !== undefined) {
         promise.catch((err) => {
-          console.warn("Audio playback blocked/failed, trying fallback:", err);
-          this.currentSourceIdx++;
-          if (this.currentSourceIdx < this.audioSources.length) {
-            this.initAudioElement();
-            this.trackAudio?.play().catch(() => this.startAmbientFallback());
-          } else {
-            this.startAmbientFallback();
-          }
+          // Playback blocked by browser autoplay policy until user gesture
+          console.warn("Autoplay notice: Waiting for user gesture to play audio.");
+          this.isMusicPlaying = false;
         });
       }
+      return true;
     } else {
       this.startAmbientFallback();
+      return true;
     }
   }
 
   private startAmbientFallback() {
     try {
       this.initContext();
-      if (!this.ctx) return;
+      if (!this.ctx || this.ctx.state === "suspended") return;
 
       const now = this.ctx.currentTime;
       this.ambientGain = this.ctx.createGain();
@@ -159,9 +156,7 @@ class AudioController {
       this.lfo.connect(lfoGain);
       if (this.oscs[0]) lfoGain.connect(this.oscs[0].frequency);
       this.lfo.start();
-    } catch (e) {
-      console.warn("Error starting fallback ambient synth:", e);
-    }
+    } catch (_) {}
   }
 
   /**
@@ -191,9 +186,7 @@ class AudioController {
           this.lfo = null;
           this.ambientGain?.disconnect();
         }, 850);
-      } catch (e) {
-        console.warn("Error stopping synth:", e);
-      }
+      } catch (_) {}
     }
   }
 
