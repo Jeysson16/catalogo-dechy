@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ZoomIn, ZoomOut, Volume2, VolumeX, SkipBack, ChevronLeft, ChevronRight, SkipForward, 
-  Play, Pause, Maximize, Minimize, X, Plus, Sparkles, ShieldCheck, Award, Zap, CheckCircle2, Music 
+  Play, Pause, Maximize, Minimize, X, Plus, Sparkles, ShieldCheck, Award, Zap, CheckCircle2 
 } from 'lucide-react';
 import { flipbookAudio } from '../utils/audioEffects';
 
@@ -32,9 +32,9 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
   onAddToCart,
   primaryColor = '#f59e0b'
 }) => {
-  const [currentSpreadIndex, setCurrentSpreadIndex] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
-  const [isSoundPlaying, setIsSoundPlaying] = useState(true); // Active by default
+  const [isSoundPlaying, setIsSoundPlaying] = useState(true);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
@@ -54,7 +54,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     };
   }, []);
 
-  // Organize catalog into paired pages (2 pages per spread: Left and Right)
+  // Organize catalog into individual pages
   const allPages = useMemo(() => {
     const pages: BookPage[] = [];
     let pageNum = 1;
@@ -80,7 +80,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
       const catProducts = products.filter(p => p.category === cat);
       if (catProducts.length === 0) return;
 
-      // Add Category Hero Page (always starts on a new page)
+      // Add Category Hero Page
       pages.push({
         type: 'category-hero',
         category: cat,
@@ -102,7 +102,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
       }
     });
 
-    // If total pages is odd, add an end cover page to keep even spreads
+    // Ensure total pages is even for desktop spreads
     if (pages.length % 2 !== 0) {
       pages.push({
         type: 'editorial',
@@ -115,23 +115,19 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     return pages;
   }, [products, categories, selectedBranch]);
 
-  // Spreads are pairs of [LeftPage, RightPage]
-  const spreads = useMemo(() => {
-    const pairs: [BookPage, BookPage][] = [];
-    for (let i = 0; i < allPages.length; i += 2) {
-      if (allPages[i] && allPages[i+1]) {
-        pairs.push([allPages[i], allPages[i+1]]);
-      }
-    }
-    return pairs;
-  }, [allPages]);
-
   const totalPages = allPages.length;
-  const currentSpread = spreads[currentSpreadIndex] || spreads[0];
+
+  // Desktop paired pages
+  const evenIndex = Math.floor(pageIndex / 2) * 2;
+  const desktopLeftPage = allPages[evenIndex];
+  const desktopRightPage = allPages[evenIndex + 1];
+
+  // Mobile single page
+  const mobileSinglePage = allPages[pageIndex] || allPages[0];
 
   const handlePageChange = (newIndex: number) => {
-    if (newIndex >= 0 && newIndex < spreads.length && newIndex !== currentSpreadIndex) {
-      setCurrentSpreadIndex(newIndex);
+    if (newIndex >= 0 && newIndex < totalPages && newIndex !== pageIndex) {
+      setPageIndex(newIndex);
       flipbookAudio.playPageFlip();
     }
   };
@@ -144,13 +140,13 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
   // Keyboard arrow navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') handlePageChange(currentSpreadIndex + 1);
-      if (e.key === 'ArrowLeft') handlePageChange(currentSpreadIndex - 1);
+      if (e.key === 'ArrowRight') handlePageChange(pageIndex + 1);
+      if (e.key === 'ArrowLeft') handlePageChange(pageIndex - 1);
       if (e.key === 'Escape' && !document.fullscreenElement) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentSpreadIndex, spreads.length]);
+  }, [pageIndex, totalPages]);
 
   // Touch Swipe Handling for Mobile
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -164,12 +160,11 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     const diffX = touchStartX.current - e.changedTouches[0].clientX;
     const diffY = touchStartY.current - e.changedTouches[0].clientY;
 
-    // Only swipe if horizontal drag is dominant and > 45px
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 45) {
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
       if (diffX > 0) {
-        handlePageChange(currentSpreadIndex + 1); // Swipe left -> next page
+        handlePageChange(pageIndex + 1); // Swipe left -> next page
       } else {
-        handlePageChange(currentSpreadIndex - 1); // Swipe right -> prev page
+        handlePageChange(pageIndex - 1); // Swipe right -> prev page
       }
     }
 
@@ -182,15 +177,15 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     let timer: any = null;
     if (isAutoPlaying) {
       timer = setInterval(() => {
-        setCurrentSpreadIndex(prev => {
-          const next = (prev + 1) % spreads.length;
+        setPageIndex(prev => {
+          const next = (prev + 1) % totalPages;
           flipbookAudio.playPageFlip();
           return next;
         });
       }, 6000);
     }
     return () => clearInterval(timer);
-  }, [isAutoPlaying, spreads.length]);
+  }, [isAutoPlaying, totalPages]);
 
   // Fullscreen handle
   const toggleFullScreen = () => {
@@ -209,8 +204,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
     e.preventDefault();
     const targetPage = Number(jumpPageInput);
     if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages) {
-      const spreadIdx = Math.floor((targetPage - 1) / 2);
-      handlePageChange(spreadIdx);
+      handlePageChange(targetPage - 1);
       setJumpPageInput('');
     }
   };
@@ -222,14 +216,14 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
   };
 
   // Render individual page content
-  const renderPage = (page: BookPage, isLeft: boolean) => {
+  const renderPage = (page: BookPage) => {
     if (!page) return <div className="w-full h-full bg-slate-950" />;
 
     if (page.type === 'editorial') {
       return (
         <div className="w-full h-full p-6 sm:p-10 flex flex-col justify-between bg-gradient-to-br from-slate-950 via-slate-900 to-stone-950 text-slate-300 border-r border-slate-800/50 overflow-y-auto max-h-[78vh] md:max-h-none scrollbar-thin">
           <div>
-            <div className="flex items-center gap-2 text-amber-400 font-serif text-sm tracking-widest uppercase mb-4">
+            <div className="flex items-center gap-2 text-amber-400 font-serif text-xs sm:text-sm tracking-widest uppercase mb-4">
               <Sparkles className="w-4 h-4" /> Editorial & Garantía
             </div>
             <h2 className="text-xl sm:text-3xl font-serif font-bold text-white mb-4 leading-tight">
@@ -283,13 +277,13 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Instrucciones Rápidas</h4>
             <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside font-light">
               <li>Desliza la pantalla hacia la izquierda o derecha para cambiar páginas.</li>
-              <li>Presiona el botón de sonido 🔊 arriba si deseas pausar o cambiar música.</li>
+              <li>Presiona el botón de sonido 🔊 arriba si deseas pausar o reproducir música.</li>
               <li>Haz clic en <strong>+ Añadir</strong> para cotizar directo.</li>
             </ul>
           </div>
 
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between z-10 pt-4 border-t border-slate-800/40">
-            <span>MODO REVISTA INTERACTIVA</span>
+            <span>CATÁLOGO DIGITAL</span>
             <span>PÁGINA {page.pageNumber}</span>
           </div>
         </div>
@@ -436,16 +430,12 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
         )}
       </AnimatePresence>
 
-      {/* TOP CONTROLS BAR */}
-      <div className="w-full py-2.5 px-3 sm:px-8 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-between z-30 shadow-2xl">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] sm:text-xs font-extrabold font-mono uppercase text-amber-400 tracking-widest px-2 py-0.5 bg-amber-500/10 rounded border border-amber-500/30">
-            Modo Revista
-          </span>
-        </div>
+      {/* TOP CONTROLS BAR (Clean & minimal, removed top "MODO REVISTA" badge) */}
+      <div className="w-full py-2 px-3 sm:px-8 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-center sm:justify-between z-30 shadow-2xl">
+        <div className="hidden sm:block" />
 
         {/* Center Control Pill */}
-        <div className="flex items-center gap-1 sm:gap-2 bg-slate-900 border border-slate-700/80 rounded-full px-2.5 py-1 shadow-xl text-slate-300 text-xs font-medium">
+        <div className="flex items-center gap-1 sm:gap-2 bg-slate-900 border border-slate-700/80 rounded-full px-3 py-1 shadow-xl text-slate-300 text-xs font-medium">
           {/* Zoom Controls */}
           <button 
             onClick={() => setIsZoomed(!isZoomed)} 
@@ -455,11 +445,11 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
             {isZoomed ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
           </button>
           
-          {/* Sound Toggle (Bad Bunny - Eoow) */}
+          {/* Sound Toggle */}
           <button 
             onClick={toggleSound} 
             className={`p-1.5 rounded-full transition-colors relative flex items-center gap-1 ${isSoundPlaying ? 'bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}
-            title="Música (Bad Bunny - Eoow)"
+            title="Música de Fondo"
           >
             {isSoundPlaying ? <Volume2 className="w-3.5 h-3.5 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
           </button>
@@ -469,7 +459,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           {/* Navigation Controls */}
           <button 
             onClick={() => handlePageChange(0)} 
-            disabled={currentSpreadIndex === 0}
+            disabled={pageIndex === 0}
             className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Primera página"
           >
@@ -477,8 +467,8 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           </button>
 
           <button 
-            onClick={() => handlePageChange(currentSpreadIndex - 1)} 
-            disabled={currentSpreadIndex === 0}
+            onClick={() => handlePageChange(pageIndex - 1)} 
+            disabled={pageIndex === 0}
             className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Página Anterior"
           >
@@ -486,12 +476,12 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           </button>
 
           <span className="font-mono px-1.5 text-slate-200 text-xs font-bold">
-            {currentSpreadIndex + 1}/{spreads.length}
+            {pageIndex + 1} / {totalPages}
           </span>
 
           <button 
-            onClick={() => handlePageChange(currentSpreadIndex + 1)} 
-            disabled={currentSpreadIndex === spreads.length - 1}
+            onClick={() => handlePageChange(pageIndex + 1)} 
+            disabled={pageIndex === totalPages - 1}
             className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Página Siguiente"
           >
@@ -499,8 +489,8 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           </button>
 
           <button 
-            onClick={() => handlePageChange(spreads.length - 1)} 
-            disabled={currentSpreadIndex === spreads.length - 1}
+            onClick={() => handlePageChange(totalPages - 1)} 
+            disabled={pageIndex === totalPages - 1}
             className="p-1 hover:bg-slate-800 hover:text-white rounded-full disabled:opacity-30 disabled:hover:bg-transparent"
             title="Última página"
           >
@@ -528,29 +518,15 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
           </button>
         </div>
 
-        {/* Right Corner: Page Jumper and Close */}
-        <div className="flex items-center gap-2">
-          <form onSubmit={handleGoToPage} className="hidden md:flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-0.5 text-xs">
-            <span className="text-slate-400">Pág:</span>
-            <input 
-              type="text" 
-              value={jumpPageInput}
-              onChange={e => setJumpPageInput(e.target.value)}
-              placeholder={`${currentSpread[0]?.pageNumber || 1}`} 
-              className="w-8 bg-transparent text-center font-mono text-amber-400 outline-none font-bold text-xs"
-            />
-            <button type="submit" className="text-[9px] font-extrabold bg-slate-800 hover:bg-amber-500 hover:text-slate-950 px-1 py-0.5 rounded uppercase">
-              GO
-            </button>
-          </form>
-
+        {/* Right Corner: Close Button */}
+        <div className="hidden sm:flex items-center gap-2">
           <button 
             onClick={onClose}
-            className="flex items-center gap-1 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95"
-            title="Cerrar Modo Revista"
+            className="flex items-center gap-1 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-3.5 py-1 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95"
+            title="Cerrar"
           >
             <X className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Cerrar</span>
+            <span>Cerrar</span>
           </button>
         </div>
       </div>
@@ -564,8 +540,8 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
         
         {/* Left Big Arrow (Desktop & Tablet) */}
         <button 
-          onClick={() => handlePageChange(currentSpreadIndex - 1)} 
-          disabled={currentSpreadIndex === 0}
+          onClick={() => handlePageChange(pageIndex - 1)} 
+          disabled={pageIndex === 0}
           className="absolute left-2 sm:left-4 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
         >
           <ChevronLeft className="w-6 h-6" />
@@ -573,77 +549,83 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
 
         {/* Right Big Arrow (Desktop & Tablet) */}
         <button 
-          onClick={() => handlePageChange(currentSpreadIndex + 1)} 
-          disabled={currentSpreadIndex === spreads.length - 1}
+          onClick={() => handlePageChange(pageIndex + 1)} 
+          disabled={pageIndex === totalPages - 1}
           className="absolute right-2 sm:right-4 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-amber-500 text-slate-300 hover:text-slate-950 border border-slate-700 hover:border-amber-400 flex items-center justify-center shadow-2xl disabled:opacity-20 transition-all transform hover:scale-105 active:scale-95 hidden md:flex"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
 
-        {/* The Book Spread Container */}
+        {/* The Book Container */}
         <div className={`w-full max-w-6xl transition-transform duration-500 ${isZoomed ? 'scale-110 md:scale-125 my-8' : 'scale-100'} perspective-[2000px]`}>
           
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentSpreadIndex}
+              key={pageIndex}
               initial={{ rotateY: 12, opacity: 0, scale: 0.96 }}
               animate={{ rotateY: 0, opacity: 1, scale: 1 }}
               exit={{ rotateY: -12, opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="w-full grid grid-cols-1 md:grid-cols-2 min-h-[460px] sm:min-h-[520px] md:min-h-[620px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.85)] border border-slate-800 relative bg-slate-950"
+              transition={{ duration: 0.28, ease: "easeInOut" }}
+              className="w-full border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.85)] bg-slate-950"
             >
-              {/* Central spine shadow (Desktop Only) */}
-              <div className="hidden md:block absolute left-1/2 -translate-x-1/2 w-8 h-full z-20 pointer-events-none bg-gradient-to-r from-black/50 via-neutral-900/40 to-black/50 shadow-[0_0_20px_rgba(0,0,0,0.8)] border-x border-white/5" />
+              {/* DESKTOP VIEW: 2 PAGES SIDE-BY-SIDE */}
+              <div className="hidden md:grid grid-cols-2 min-h-[580px] lg:min-h-[640px] relative">
+                {/* Central spine shadow */}
+                <div className="absolute left-1/2 -translate-x-1/2 w-8 h-full z-20 pointer-events-none bg-gradient-to-r from-black/50 via-neutral-900/40 to-black/50 shadow-[0_0_20px_rgba(0,0,0,0.8)] border-x border-white/5" />
 
-              {/* LEFT PAGE */}
-              <div className="w-full h-full relative z-10 flex flex-col bg-slate-950">
-                {renderPage(currentSpread[0], true)}
+                <div className="w-full h-full relative z-10 flex flex-col bg-slate-950">
+                  {renderPage(desktopLeftPage)}
+                </div>
+
+                <div className="w-full h-full relative z-10 flex flex-col bg-slate-950">
+                  {renderPage(desktopRightPage)}
+                </div>
               </div>
 
-              {/* RIGHT PAGE */}
-              <div className="w-full h-full relative z-10 flex flex-col bg-slate-950 hidden md:block">
-                {renderPage(currentSpread[1], false)}
+              {/* MOBILE VIEW: EXACTLY 1 SINGLE PAGE AT A TIME */}
+              <div className="block md:hidden w-full min-h-[480px] sm:min-h-[540px]">
+                {renderPage(mobileSinglePage)}
               </div>
             </motion.div>
           </AnimatePresence>
-
-          {/* Mobile indicator / second page rendered smoothly below on small screens */}
-          {currentSpread[1] && (
-            <div className="mt-3 block md:hidden w-full min-h-[460px] rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
-              {renderPage(currentSpread[1], false)}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* MOBILE QUICK NAVIGATION ARROWS (Floating at bottom for mobile) */}
-      <div className="flex md:hidden items-center justify-between px-4 py-1.5 bg-slate-900/90 border-t border-slate-800 z-30">
+      {/* MOBILE NAVIGATION CONTROL BAR (Floating at bottom for mobile) */}
+      <div className="flex md:hidden items-center justify-between px-4 py-2 bg-slate-900/95 border-t border-slate-800 z-30">
         <button
-          onClick={() => handlePageChange(currentSpreadIndex - 1)}
-          disabled={currentSpreadIndex === 0}
-          className="flex items-center gap-1 px-3 py-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 rounded-full text-xs font-bold disabled:opacity-30"
+          onClick={() => handlePageChange(pageIndex - 1)}
+          disabled={pageIndex === 0}
+          className="flex items-center gap-1 px-3.5 py-1.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 rounded-full text-xs font-bold disabled:opacity-30 active:scale-95 transition-all"
         >
           <ChevronLeft className="w-4 h-4" /> Anterior
         </button>
+
         <span className="font-mono text-xs text-amber-400 font-bold">
-          Pág {currentSpread[0]?.pageNumber || 1} / {totalPages}
+          Pág {pageIndex + 1} / {totalPages}
         </span>
+
         <button
-          onClick={() => handlePageChange(currentSpreadIndex + 1)}
-          disabled={currentSpreadIndex === spreads.length - 1}
-          className="flex items-center gap-1 px-3 py-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 rounded-full text-xs font-bold disabled:opacity-30"
+          onClick={() => handlePageChange(pageIndex + 1)}
+          disabled={pageIndex === totalPages - 1}
+          className="flex items-center gap-1 px-3.5 py-1.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 rounded-full text-xs font-bold disabled:opacity-30 active:scale-95 transition-all"
         >
           Siguiente <ChevronRight className="w-4 h-4" />
+        </button>
+
+        <button 
+          onClick={onClose}
+          className="p-1.5 bg-red-600/30 text-red-300 rounded-full active:scale-95 ml-2"
+          title="Cerrar"
+        >
+          <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* BOTTOM PAGINATION THUMBS */}
       <div className="w-full py-2.5 px-4 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-md flex items-center justify-center gap-1.5 overflow-x-auto z-30 scrollbar-thin scrollbar-thumb-slate-700">
-        {spreads.map((spread, idx) => {
-          const isSelected = idx === currentSpreadIndex;
-          const leftNum = spread[0]?.pageNumber || '?';
-          const rightNum = spread[1]?.pageNumber;
-          const label = rightNum ? `${leftNum}-${rightNum}` : `${leftNum}`;
+        {allPages.map((page, idx) => {
+          const isSelected = idx === pageIndex;
 
           return (
             <button
@@ -655,7 +637,7 @@ export const FlipbookCatalog: React.FC<FlipbookCatalogProps> = ({
                   : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
               }`}
             >
-              {label}
+              {page.pageNumber}
             </button>
           );
         })}
