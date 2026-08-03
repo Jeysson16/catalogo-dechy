@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { collection, getDocs, query, where, onSnapshot, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, productCatalogDb } from '../config/firebase';
-import { decorateCatalogProduct } from '../utils/catalogProduct';
+import { decorateCatalogProduct, isCatalogProductVisible, normalizeProductMatchKey } from '../utils/catalogProduct';
 import { BranchSelector } from './BranchSelector';
 import { ProductCard } from './ProductCard';
 import { SharedCartView } from './SharedCartView';
@@ -432,15 +432,44 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
     
     let baseProducts: any[] = [];
     let branchLinks: any[] = [];
+    let dechyProducts: any[] = [];
     let baseLoaded = false;
     let linksLoaded = false;
+    let dechyProductsLoaded = false;
 
     const updateCombinedProducts = () => {
-      if (!baseLoaded || !linksLoaded) return;
+      if (!baseLoaded || !linksLoaded || !dechyProductsLoaded) return;
       const linksMap = new Map<string, any>(branchLinks.map(l => [l.catalogProductId || l.productId, l]));
+      const hiddenDechyIds = new Set<string>();
+      const hiddenDechySkus = new Set<string>();
+      const hiddenDechyNames = new Set<string>();
+
+      dechyProducts
+        .filter(p => {
+          const productBranchId = p.branchId || p.branch;
+          return (!productBranchId || productBranchId === selectedBranch.id) && !isCatalogProductVisible(p);
+        })
+        .forEach(p => {
+          [p.catalogProductId, p.productId, p.id]
+            .map(normalizeProductMatchKey)
+            .filter(Boolean)
+            .forEach(id => hiddenDechyIds.add(id));
+          const sku = normalizeProductMatchKey(p.sku);
+          const name = normalizeProductMatchKey(p.name);
+          if (sku) hiddenDechySkus.add(sku);
+          if (name) hiddenDechyNames.add(name);
+        });
+
+      const isHiddenByDechy = (product: any) => {
+        const id = normalizeProductMatchKey(product.id);
+        const sku = normalizeProductMatchKey(product.sku);
+        const name = normalizeProductMatchKey(product.name);
+        return hiddenDechyIds.has(id) || (sku && hiddenDechySkus.has(sku)) || (name && hiddenDechyNames.has(name));
+      };
+
       const combined = baseProducts
         .map(p => decorateCatalogProduct(p, linksMap.get(p.id)))
-        .filter(p => p.visible !== false && p.branchCatalogEnabled !== false && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
+        .filter(p => isCatalogProductVisible(p) && !isHiddenByDechy(p) && (p.currentStock > 0 || p.stock > 0 || p.stockManagedByDechy === false));
       setProducts(combined);
       setLoading(false);
     };
@@ -469,9 +498,24 @@ export const Catalog: React.FC<CatalogProps> = ({ initialFlipbook = false }) => 
       updateCombinedProducts();
     });
 
+    // Migration bridge: the existing Dechy inventory visibility button writes
+    // to /products. A hidden local match must also disappear from the external
+    // Inventory catalog until every branch uses branchCatalogProducts.enabled.
+    const qDechyProducts = query(collection(db, "products"));
+    const unsubDechyProducts = onSnapshot(qDechyProducts, (snap) => {
+      dechyProducts = snap.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
+      dechyProductsLoaded = true;
+      updateCombinedProducts();
+    }, (err) => {
+      console.error("Error fetching Dechy product visibility:", err);
+      dechyProductsLoaded = true;
+      updateCombinedProducts();
+    });
+
     return () => {
       unsubBase();
       unsubLinks();
+      unsubDechyProducts();
     };
   }, [selectedBranch]);
 

@@ -1,5 +1,32 @@
 export const CATALOG_PRODUCT_SOURCE = "inventory";
 
+const HIDDEN_VISIBILITY_VALUES = new Set([
+  "false",
+  "0",
+  "hidden",
+  "oculto",
+  "oculta",
+  "inactivo",
+  "inactive",
+]);
+
+export const isCatalogProductVisible = (product: any): boolean => {
+  const value = product?.visible;
+  if (value === false || value === 0) return false;
+  if (typeof value === "string" && HIDDEN_VISIBILITY_VALUES.has(value.trim().toLowerCase())) {
+    return false;
+  }
+  return product?.branchCatalogEnabled !== false;
+};
+
+export const normalizeProductMatchKey = (value: any): string =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
 const COMMERCIAL_FIELDS = [
   "unitPrice",
   "price",
